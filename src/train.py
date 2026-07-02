@@ -1,0 +1,116 @@
+import torch
+import torch.nn as nn
+import numpy as np
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import joblib
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from src.preprocess import load_data, clean_data, prepare_inputs, split_data
+from src.fusion import FusionModel
+from src.dt_model import DTModel
+
+EPOCHS     = 20
+BATCH_SIZE = 32
+LR         = 0.001
+DEVICE     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"✅ Using device: {DEVICE}")
+
+# ── Load & Prepare Data ───────────────────────────────────────
+df = load_data()
+df = clean_data(df)
+cnn_data, gru_data, dt_data, y, scaler = prepare_inputs(df)
+(cnn_tr, cnn_te,
+ gru_tr, gru_te,
+ dt_tr,  dt_te,
+ y_tr,   y_te) = split_data(cnn_data, gru_data, dt_data, y)
+
+# ── Train Decision Tree ───────────────────────────────────────
+print("\n── Training Decision Tree ──")
+dt_model = DTModel()
+dt_model.train(dt_tr, y_tr)
+dt_model.save()
+
+dt_preds = dt_model.predict(dt_te)
+dt_acc   = accuracy_score(y_te, dt_preds)
+print(f"✅ Decision Tree Test Accuracy: {dt_acc:.4f}")
+
+# ── Add Noise to Training Data ────────────────────────────────
+noise_factor = 0.3
+cnn_tr_noisy = cnn_tr + noise_factor * np.random.randn(*cnn_tr.shape).astype(np.float32)
+gru_tr_noisy = gru_tr + noise_factor * np.random.randn(*gru_tr.shape).astype(np.float32)
+dt_tr_noisy  = dt_tr  + noise_factor * np.random.randn(*dt_tr.shape).astype(np.float32)
+
+# ── Convert to Tensors ────────────────────────────────────────
+cnn_tr_t = torch.tensor(cnn_tr_noisy)
+cnn_te_t = torch.tensor(cnn_te)
+gru_tr_t = torch.tensor(gru_tr_noisy)
+gru_te_t = torch.tensor(gru_te)
+dt_tr_t  = torch.tensor(dt_tr_noisy)
+dt_te_t  = torch.tensor(dt_te)
+y_tr_t   = torch.tensor(y_tr, dtype=torch.float32).unsqueeze(1)
+y_te_t   = torch.tensor(y_te, dtype=torch.float32).unsqueeze(1)
+
+train_dataset = TensorDataset(cnn_tr_t, gru_tr_t, dt_tr_t, y_tr_t)
+train_loader  = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+
+# ── Train Fusion Model ────────────────────────────────────────
+print("\n── Training Fusion Model (CNN + Bi-GRU + DT) ──")
+model     = FusionModel(dt_feature_size=dt_tr.shape[1]).to(DEVICE)
+optimizer = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=1e-3)
+criterion = nn.BCELoss()
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.5)
+
+best_loss = float('inf')
+
+for epoch in range(EPOCHS):
+    model.train()
+    epoch_loss = 0
+    for cnn_b, gru_b, dt_b, y_b in train_loader:
+        cnn_b, gru_b, dt_b, y_b = (cnn_b.to(DEVICE), gru_b.to(DEVICE),
+                                     dt_b.to(DEVICE),  y_b.to(DEVICE))
+        optimizer.zero_grad()
+        output = model(cnn_b, gru_b, dt_b).clamp(1e-7, 1 - 1e-7)
+        loss   = criterion(output, y_b)
+        loss.backward()
+        optimizer.step()
+        epoch_loss += loss.item()
+
+    scheduler.step()
+    avg_loss = epoch_loss / len(train_loader)
+
+    if avg_loss < best_loss:
+        best_loss = avg_loss
+        torch.save(model.state_dict(), "models/fusion_model_best.pth")
+
+    if (epoch + 1) % 5 == 0:
+        print(f"   Epoch {epoch+1}/{EPOCHS} | Loss: {avg_loss:.4f}")
+
+# ── Evaluate ──────────────────────────────────────────────────
+print("\n── Evaluating on Test Set ──")
+model.load_state_dict(torch.load("models/fusion_model_best.pth"))
+model.eval()
+with torch.no_grad():
+    preds = model(cnn_te_t.to(DEVICE), gru_te_t.to(DEVICE), dt_te_t.to(DEVICE))
+    preds = (preds.cpu().numpy() > 0.5).astype(int).flatten()
+
+acc  = accuracy_score(y_te, preds)
+prec = precision_score(y_te, preds)
+rec  = recall_score(y_te, preds)
+f1   = f1_score(y_te, preds)
+
+print(f"\n✅ Fusion Model Test Accuracy:  {acc:.4f}")
+print(f"✅ Precision:                   {prec:.4f}")
+print(f"✅ Recall:                      {rec:.4f}")
+print(f"✅ F1 Score:                    {f1:.4f}")
+print(f"\n── Individual Model Comparison ──")
+print(f"   Decision Tree Accuracy:  {dt_acc:.4f}")
+print(f"   Fusion Model Accuracy:   {acc:.4f}")
+
+# ── Save ──────────────────────────────────────────────────────
+torch.save(model.state_dict(), "models/fusion_model.pth")
+joblib.dump(scaler, "models/scaler.pkl")
+print("\n✅ Final model saved to models/fusion_model.pth")
+print("✅ Scaler saved to models/scaler.pkl")
