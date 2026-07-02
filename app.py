@@ -105,7 +105,7 @@ with st.sidebar:
 # PAGE 1 — PREDICT ASD
 # ══════════════════════════════════════════════════════════════
 if page == "🔍 Predict ASD":
-    st.title(" Multimodal ASD Prediction System")
+    st.title("🧠 Multimodal ASD Prediction System")
     st.markdown("### Autism Spectrum Disorder Detection in Children")
     st.divider()
 
