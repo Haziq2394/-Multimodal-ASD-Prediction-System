@@ -23,13 +23,17 @@ def clean_data(df):
     # Encode target label
     df['ASD_traits'] = df['ASD_traits'].map({'Yes': 1, 'No': 0})
 
-    # Encode all remaining categorical columns
-    le = LabelEncoder()
+    # Encode all remaining categorical columns — keep the fitted encoders
+    # so the Streamlit app can reuse the SAME encoding instead of
+    # refitting on a single row (which would always map to 0).
+    encoders = {}
     for col in df.select_dtypes(include='object').columns:
+        le = LabelEncoder()
         df[col] = le.fit_transform(df[col].astype(str))
+        encoders[col] = le
 
     print("✅ Data cleaned and encoded")
-    return df
+    return df, encoders
 
 # ── Prepare Three Inputs ──────────────────────────────────────
 def prepare_inputs(df):
@@ -70,7 +74,7 @@ def split_data(cnn_data, gru_data, dt_data, y, test_size=0.2):
 # ── Run as standalone test ────────────────────────────────────
 if __name__ == "__main__":
     df = load_data()
-    df = clean_data(df)
+    df, encoders = clean_data(df)
     cnn_data, gru_data, dt_data, y, scaler = prepare_inputs(df)
     splits = split_data(cnn_data, gru_data, dt_data, y)
     print("✅ Preprocessing complete!")
