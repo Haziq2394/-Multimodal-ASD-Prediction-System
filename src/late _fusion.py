@@ -101,13 +101,10 @@ results["Decision Tree"] = full_eval(dt_preds,  dt_te_p,  "Decision Tree (standa
 results["Late Fusion"]   = full_eval(late_fusion_preds, late_fusion_probs, "Late Fusion (Logistic Regression Meta-Classifier)")
 
 # ── McNemar's Test ────────────────────────────────────────────────
-# Compares whether two classifiers' disagreements are symmetric (i.e.
-# whether one is statistically significantly better than the other).
 def mcnemar_test(preds_a, preds_b, y_true, name_a, name_b):
     correct_a = (preds_a == y_true)
     correct_b = (preds_b == y_true)
 
-    # b: A correct, B wrong | c: A wrong, B correct
     b = np.sum(correct_a & ~correct_b)
     c = np.sum(~correct_a & correct_b)
 
@@ -130,8 +127,6 @@ mcnemar_results["Late Fusion vs Bi-GRU"] = mcnemar_test(late_fusion_preds, gru_p
 mcnemar_results["Late Fusion vs DT"]     = mcnemar_test(late_fusion_preds, dt_preds,  y_te, "Late Fusion", "Decision Tree")
 
 # ── DeLong's Test ─────────────────────────────────────────────────
-# Compares whether two ROC-AUC values are statistically significantly
-# different, accounting for correlation between paired predictions.
 def _compute_midrank(x):
     J = np.argsort(x)
     Z = x[J]
