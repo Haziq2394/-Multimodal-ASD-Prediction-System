@@ -1,0 +1,53 @@
+DECISION TREE — IF-THEN RULE PATHWAY (CART, Gini, Cost-Complexity Pruned)
+===========================================================================
+ccp_alpha used: 0.000000
+Tree depth: 5 | Leaves: 16
+Test Accuracy: 0.9597 | Precision: 0.9585 | Recall: 0.9674 | F1: 0.9630
+===========================================================================
+
+|--- Qchat_10_Score <= -0.25
+|   |--- Qchat_10_Score <= -0.95
+|   |   |--- Sex <= -0.52
+|   |   |   |--- class: 0
+|   |   |--- Sex >  -0.52
+|   |   |   |--- Anxiety_disorder <= -0.06
+|   |   |   |   |--- Ethnicity <= -0.01
+|   |   |   |   |   |--- class: 1
+|   |   |   |   |--- Ethnicity >  -0.01
+|   |   |   |   |   |--- class: 1
+|   |   |   |--- Anxiety_disorder >  -0.06
+|   |   |   |   |--- A9 <= 0.55
+|   |   |   |   |   |--- class: 0
+|   |   |   |   |--- A9 >  0.55
+|   |   |   |   |   |--- class: 1
+|   |--- Qchat_10_Score >  -0.95
+|   |   |--- Jaundice <= -0.65
+|   |   |   |--- Age_Years <= -1.19
+|   |   |   |   |--- Ethnicity <= -0.01
+|   |   |   |   |   |--- class: 0
+|   |   |   |   |--- Ethnicity >  -0.01
+|   |   |   |   |   |--- class: 0
+|   |   |   |--- Age_Years >  -1.19
+|   |   |   |   |--- class: 0
+|   |   |--- Jaundice >  -0.65
+|   |   |   |--- class: 0
+|--- Qchat_10_Score >  -0.25
+|   |--- Ethnicity <= 1.50
+|   |   |--- A7 <= 0.33
+|   |   |   |--- Qchat_10_Score <= 0.44
+|   |   |   |   |--- Social_Responsiveness_Scale <= 1.75
+|   |   |   |   |   |--- class: 1
+|   |   |   |   |--- Social_Responsiveness_Scale >  1.75
+|   |   |   |   |   |--- class: 1
+|   |   |   |--- Qchat_10_Score >  0.44
+|   |   |   |   |--- A6 <= 0.42
+|   |   |   |   |   |--- class: 0
+|   |   |   |   |--- A6 >  0.42
+|   |   |   |   |   |--- class: 1
+|   |   |--- A7 >  0.33
+|   |   |   |--- class: 1
+|   |--- Ethnicity >  1.50
+|   |   |--- Social/Behavioural Issues <= -0.05
+|   |   |   |--- class: 0
+|   |   |--- Social/Behavioural Issues >  -0.05
+|   |   |   |--- class: 1
