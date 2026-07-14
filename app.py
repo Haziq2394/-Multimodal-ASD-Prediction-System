@@ -4,12 +4,13 @@ import numpy as np
 import joblib
 import sys
 import os
+import json
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import LabelEncoder
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from src.fusion import FusionModel
+from src.standalone_models import CNNClassifier, BiGRUClassifier
 
 # ── Page Config ───────────────────────────────────────────────
 st.set_page_config(
@@ -67,14 +68,35 @@ st.markdown("""
 @st.cache_resource
 def load_models():
     scaler   = joblib.load("models/scaler.pkl")
-    dt_model = joblib.load("models/dt_model.pkl")
-    fusion   = FusionModel(dt_feature_size=26)
-    fusion.load_state_dict(torch.load("models/fusion_model.pth",
-                           map_location=torch.device("cpu")))
-    fusion.eval()
-    return scaler, dt_model, fusion
+    encoders = joblib.load("models/encoders.pkl")
+    feature_cols = joblib.load("models/feature_cols.pkl")
 
-scaler, dt_model, fusion_model = load_models()
+    dt_model = joblib.load("models/dt_model.pkl")
+
+    cnn_model = CNNClassifier()
+    cnn_model.load_state_dict(torch.load("models/cnn_standalone.pth", map_location="cpu"))
+    cnn_model.eval()
+
+    bigru_model = BiGRUClassifier()
+    bigru_model.load_state_dict(torch.load("models/bigru_standalone.pth", map_location="cpu"))
+    bigru_model.eval()
+
+    fusion = FusionModel(dt_feature_size=len(feature_cols))
+    fusion.load_state_dict(torch.load("models/fusion_model.pth", map_location="cpu"))
+    fusion.eval()
+
+    comparison = {}
+    if os.path.exists("models/comparison_results.json"):
+        with open("models/comparison_results.json") as f:
+            comparison = json.load(f)
+
+    return scaler, encoders, feature_cols, dt_model, cnn_model, bigru_model, fusion, comparison
+
+scaler, encoders, feature_cols, dt_model, cnn_model, bigru_model, fusion_model, comparison = load_models()
+
+SEQ_COLS = ['A1','A2','A3','A4','A5','A6','A7','A8','A9','A10_Autism_Spectrum_Quotient']
+
+DEFAULT_FUSION_METRICS = {"accuracy": 0.995, "precision": 1.0, "recall": 0.991, "f1": 0.995}
 
 # ── Sidebar ───────────────────────────────────────────────────
 with st.sidebar:
@@ -82,15 +104,16 @@ with st.sidebar:
     page = st.radio("", ["🔍 Predict ASD", "📊 Model Dashboard", "ℹ️ About"])
     st.divider()
 
-    st.markdown("## 📈 Model Performance")
+    st.markdown("## 📈 Fusion Model Performance")
+    fusion_metrics = comparison.get("Fusion", DEFAULT_FUSION_METRICS)
     st.markdown("**Accuracy**")
-    st.markdown("### 99.5%")
+    st.markdown(f"### {fusion_metrics['accuracy']*100:.1f}%")
     st.markdown("**Precision**")
-    st.markdown("### 100.0%")
+    st.markdown(f"### {fusion_metrics['precision']*100:.1f}%")
     st.markdown("**Recall**")
-    st.markdown("### 99.1%")
+    st.markdown(f"### {fusion_metrics['recall']*100:.1f}%")
     st.markdown("**F1 Score**")
-    st.markdown("### 99.5%")
+    st.markdown(f"### {fusion_metrics['f1']*100:.1f}%")
     st.divider()
 
     st.markdown("## ⚙️ System Info")
@@ -109,20 +132,31 @@ if page == "🔍 Predict ASD":
     st.markdown("### Autism Spectrum Disorder Detection in Children")
     st.divider()
 
-    # Metric cards
+    # Metric cards (fusion headline numbers)
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     with c1:
-        st.markdown('<div class="metric-card"><h2>99.5%</h2><p>ACCURACY</p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><h2>{fusion_metrics["accuracy"]*100:.1f}%</h2><p>ACCURACY</p></div>', unsafe_allow_html=True)
     with c2:
-        st.markdown('<div class="metric-card"><h2>99.5%</h2><p>F1-SCORE</p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><h2>{fusion_metrics["f1"]*100:.1f}%</h2><p>F1-SCORE</p></div>', unsafe_allow_html=True)
     with c3:
-        st.markdown('<div class="metric-card"><h2>100%</h2><p>PRECISION</p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><h2>{fusion_metrics["precision"]*100:.1f}%</h2><p>PRECISION</p></div>', unsafe_allow_html=True)
     with c4:
-        st.markdown('<div class="metric-card"><h2>99.1%</h2><p>RECALL</p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><h2>{fusion_metrics["recall"]*100:.1f}%</h2><p>RECALL</p></div>', unsafe_allow_html=True)
     with c5:
         st.markdown('<div class="metric-card"><h2>26</h2><p>FEATURES</p></div>', unsafe_allow_html=True)
     with c6:
         st.markdown('<div class="metric-card"><h2>1,985</h2><p>SAMPLES</p></div>', unsafe_allow_html=True)
+
+    st.divider()
+
+    # ── Model Selector ──────────────────────────────────────────
+    st.subheader("🧬 Choose Prediction Model")
+    model_choice = st.selectbox(
+        "Select which model to use for this prediction",
+        ["Combined (CNN + Bi-GRU + Decision Tree)", "CNN Only", "Bi-GRU Only", "Decision Tree Only"]
+    )
+    if model_choice != "Combined (CNN + Bi-GRU + Decision Tree)":
+        st.info(f"Running prediction using **{model_choice}** — this isolates that branch's contribution for comparison purposes.")
 
     st.divider()
     st.subheader("📋 Enter Child's Information")
@@ -194,9 +228,20 @@ if page == "🔍 Predict ASD":
         }
 
         df_input = pd.DataFrame([row])
-        le = LabelEncoder()
-        for col in df_input.select_dtypes(include='object').columns:
-            df_input[col] = le.fit_transform(df_input[col].astype(str))
+
+        # Apply the SAME encoders used at training time
+        # (fixes the bug where fit_transform on one row always maps to 0)
+        for col, le in encoders.items():
+            if col in df_input.columns:
+                val = str(df_input[col].iloc[0])
+                if val in le.classes_:
+                    df_input[col] = le.transform([val])
+                else:
+                    # unseen category safeguard: fall back to the first known class
+                    df_input[col] = le.transform([le.classes_[0]])
+
+        # Enforce exact training column order before scaling
+        df_input = df_input[feature_cols]
 
         X        = df_input.values.astype(np.float32)
         X_scaled = scaler.transform(X).astype(np.float32)
@@ -207,13 +252,28 @@ if page == "🔍 Predict ASD":
         dt_input  = torch.tensor(X_scaled,                dtype=torch.float32)
 
         with torch.no_grad():
-            prob = fusion_model(cnn_input, gru_input, dt_input).item()
+            cnn_prob   = cnn_model(cnn_input).item()
+            bigru_prob = bigru_model(gru_input).item()
+        dt_prob = dt_model.predict_proba(X_scaled)[0][1]
+
+        with torch.no_grad():
+            fusion_prob = fusion_model(cnn_input, gru_input, dt_input).item()
+
+        # Pick the probability that matches the selected model
+        if model_choice == "CNN Only":
+            prob, active_name = cnn_prob, "CNN"
+        elif model_choice == "Bi-GRU Only":
+            prob, active_name = bigru_prob, "Bi-GRU"
+        elif model_choice == "Decision Tree Only":
+            prob, active_name = dt_prob, "Decision Tree"
+        else:
+            prob, active_name = fusion_prob, "Fusion (Combined)"
 
         prediction = "ASD Traits Detected" if prob > 0.5 else "No ASD Traits Detected"
         confidence = prob if prob > 0.5 else 1 - prob
-        dt_prob    = dt_model.predict_proba(X_scaled)[0][1]
 
         st.divider()
+        st.caption(f"Prediction made using: **{active_name}**")
         if prob > 0.5:
             st.error(f"## 🔴 {prediction}")
         else:
@@ -221,11 +281,12 @@ if page == "🔍 Predict ASD":
 
         st.metric("Confidence Score", f"{confidence * 100:.1f}%")
 
-        st.markdown("**Model Contributions:**")
-        mc1, mc2, mc3 = st.columns(3)
-        mc1.metric("CNN (Visual Pattern)", f"{prob * 100:.1f}%")
-        mc2.metric("Bi-GRU (Sequence)",    f"{prob * 100:.1f}%")
-        mc3.metric("Decision Tree",         f"{dt_prob * 100:.1f}%")
+        st.markdown("**All Model Outputs (for comparison):**")
+        mc1, mc2, mc3, mc4 = st.columns(4)
+        mc1.metric("CNN", f"{cnn_prob * 100:.1f}%")
+        mc2.metric("Bi-GRU", f"{bigru_prob * 100:.1f}%")
+        mc3.metric("Decision Tree", f"{dt_prob * 100:.1f}%")
+        mc4.metric("Fusion", f"{fusion_prob * 100:.1f}%")
 
         st.divider()
         st.subheader("📊 Prediction Visualization")
@@ -236,10 +297,10 @@ if page == "🔍 Predict ASD":
             fig1.patch.set_alpha(0)
             ax1.set_facecolor("none")
             color = '#e74c3c' if prob > 0.5 else '#2ecc71'
-            ax1.barh(["Confidence"], [confidence * 100], color=color, height=0.4)
+            ax1.barh([active_name], [confidence * 100], color=color, height=0.4)
             ax1.set_xlim(0, 100)
             ax1.set_xlabel("Confidence (%)", color='white')
-            ax1.set_title("Prediction Confidence", color='white')
+            ax1.set_title(f"{active_name} — Confidence", color='white')
             ax1.axvline(x=50, color='gray', linestyle='--', linewidth=1)
             ax1.tick_params(colors='white')
             for spine in ax1.spines.values():
@@ -250,20 +311,19 @@ if page == "🔍 Predict ASD":
             fig2, ax2 = plt.subplots(figsize=(5, 3))
             fig2.patch.set_alpha(0)
             ax2.set_facecolor("none")
-            models  = ["CNN", "Bi-GRU", "Decision Tree"]
-            scores  = [prob * 100, prob * 100, dt_prob * 100]
+            models  = ["CNN", "Bi-GRU", "Decision\nTree", "Fusion"]
+            scores  = [cnn_prob * 100, bigru_prob * 100, dt_prob * 100, fusion_prob * 100]
             colors2 = ['#e74c3c' if s > 50 else '#2ecc71' for s in scores]
             ax2.bar(models, scores, color=colors2)
             ax2.set_ylim(0, 100)
             ax2.set_ylabel("ASD Probability (%)", color='white')
-            ax2.set_title("Model Contributions", color='white')
+            ax2.set_title("All Models — This Prediction", color='white')
             ax2.axhline(y=50, color='gray', linestyle='--', linewidth=1)
             ax2.tick_params(colors='white')
             for spine in ax2.spines.values():
                 spine.set_visible(False)
             st.pyplot(fig2)
 
-       
 
 # ══════════════════════════════════════════════════════════════
 # PAGE 2 — MODEL DASHBOARD
@@ -281,29 +341,36 @@ elif page == "📊 Model Dashboard":
         fig.patch.set_alpha(0)
         ax.set_facecolor("none")
         models  = ["CNN", "Bi-GRU", "Decision\nTree", "Fusion\nModel"]
-        accs    = [91.2, 90.8, 95.97, 99.5]
+        default_accs = {"CNN": 91.2, "Bi-GRU": 90.8, "Decision Tree": 95.97, "Fusion": 99.5}
+        accs = [
+            comparison.get("CNN", {}).get("accuracy", default_accs["CNN"]/100) * 100,
+            comparison.get("Bi-GRU", {}).get("accuracy", default_accs["Bi-GRU"]/100) * 100,
+            comparison.get("Decision Tree", {}).get("accuracy", default_accs["Decision Tree"]/100) * 100,
+            comparison.get("Fusion", {}).get("accuracy", default_accs["Fusion"]/100) * 100,
+        ]
         colors  = ['#4fc3f7', '#81c784', '#ffb74d', '#e57373']
         bars    = ax.bar(models, accs, color=colors)
-        ax.set_ylim(80, 105)
+        ax.set_ylim(max(min(accs) - 5, 0), 105)
         ax.set_ylabel("Accuracy (%)", color='white')
         ax.set_title("Individual vs Fusion Model Accuracy", color='white')
         ax.tick_params(colors='white')
         for bar, acc in zip(bars, accs):
             ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.3,
-                    f'{acc}%', ha='center', color='white', fontsize=9)
+                    f'{acc:.1f}%', ha='center', color='white', fontsize=9)
         for spine in ax.spines.values():
             spine.set_visible(False)
         st.pyplot(fig)
 
     with col2:
-        st.subheader("Metrics Overview")
+        st.subheader("Fusion Model — Metrics Overview")
         fig2, ax2 = plt.subplots(figsize=(6, 4))
         fig2.patch.set_alpha(0)
         ax2.set_facecolor("none")
         metrics = ["Accuracy", "Precision", "Recall", "F1 Score"]
-        values  = [99.5, 100.0, 99.1, 99.5]
+        values  = [fusion_metrics["accuracy"]*100, fusion_metrics["precision"]*100,
+                   fusion_metrics["recall"]*100, fusion_metrics["f1"]*100]
         ax2.bar(metrics, values, color='#4fc3f7')
-        ax2.set_ylim(95, 101)
+        ax2.set_ylim(max(min(values) - 5, 0), 101)
         ax2.set_ylabel("Score (%)", color='white')
         ax2.set_title("Fusion Model Metrics", color='white')
         ax2.tick_params(colors='white')
@@ -340,7 +407,8 @@ elif page == "ℹ️ About":
     ## 🧠 Multimodal ASD Prediction System
 
     This system predicts **Autism Spectrum Disorder (ASD) traits in children** using a
-    multimodal deep learning approach that combines three different models:
+    multimodal deep learning approach that combines three different models, and lets
+    the user compare each branch individually against the combined fusion prediction:
 
     ### Models Used
     - **CNN (Convolutional Neural Network)** — Analyses behavioural screening scores
@@ -352,21 +420,14 @@ elif page == "ℹ️ About":
 
     ### Fusion Strategy
     The outputs of all three models are **concatenated and passed through a fusion
-    classifier** that makes the final ASD prediction.
+    classifier** that makes the final ASD prediction. Users can also select an
+    individual model to see its standalone contribution.
 
     ### Dataset
     - **Source:** Kaggle Autistic Child Behavioural Dataset
     - **Samples:** 1,985 children
     - **Features:** 26 behavioural, clinical, and demographic features
     - **Target:** ASD Traits (Yes / No)
-
-    ### Performance
-    | Metric | Score |
-    |---|---|
-    | Accuracy  | 99.5%  |
-    | Precision | 100.0% |
-    | Recall    | 99.1%  |
-    | F1 Score  | 99.5%  |
 
     ### Disclaimer
     > ⚠️ This tool is for **research and educational purposes only**.
