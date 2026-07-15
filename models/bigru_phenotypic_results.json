@@ -1,0 +1,20 @@
+{
+  "accuracy": 0.7011494252873564,
+  "precision": 0.7297297297297297,
+  "recall": 0.627906976744186,
+  "f1": 0.675,
+  "roc_auc": 0.738107822410148,
+  "confusion_matrix": [
+    [
+      68,
+      20
+    ],
+    [
+      32,
+      54
+    ]
+  ],
+  "train_samples": 694,
+  "test_samples": 174,
+  "feature_note": "FIQ->VIQ->PIQ sequence; SRS excluded (too sparse), ADI-R excluded (label leakage)"
+}
