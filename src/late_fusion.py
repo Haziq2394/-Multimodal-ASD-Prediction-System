@@ -44,7 +44,7 @@ bigru_model = BiGRUClassifier()
 bigru_model.load_state_dict(torch.load("models/bigru_standalone.pth", map_location="cpu"))
 bigru_model.eval()
 
-dt_model = joblib.load("models/dt_model.pkl")
+dt_model = joblib.load("models/dt_model_pruned.pkl")
 
 def get_probs(cnn_x, gru_x, dt_x):
     with torch.no_grad():

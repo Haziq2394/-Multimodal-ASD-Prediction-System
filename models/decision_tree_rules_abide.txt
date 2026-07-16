@@ -1,0 +1,16 @@
+DECISION TREE (ABIDE clinical features) — IF-THEN RULE PATHWAY
+=================================================================
+Features: ['AGE_AT_SCAN', 'SEX', 'FIQ', 'VIQ', 'PIQ']
+Accuracy: 0.6839 | Precision: 0.6867 | Recall: 0.6628 | F1: 0.6746
+=================================================================
+
+|--- FIQ <= -0.37
+|   |--- VIQ <= -1.40
+|   |   |--- class: 1
+|   |--- VIQ >  -1.40
+|   |   |--- class: 1
+|--- FIQ >  -0.37
+|   |--- PIQ <= 1.16
+|   |   |--- class: 0
+|   |--- PIQ >  1.16
+|   |   |--- class: 1

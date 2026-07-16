@@ -14,6 +14,15 @@ from src.standalone_models import CNNClassifier, BiGRUClassifier
 from src.fusion import FusionModel
 from src.dt_model import DTModel
 
+# ── Reproducibility ─────────────────────────────────────────────
+SEED = 42
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(SEED)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 EPOCHS     = 20
 BATCH_SIZE = 32
 LR         = 0.001
@@ -56,7 +65,11 @@ def train_single_branch(model, X_tr, X_te, name):
 
     X_tr_t = torch.tensor(X_tr, dtype=torch.float32)
     X_te_t = torch.tensor(X_te, dtype=torch.float32)
-    train_loader = DataLoader(TensorDataset(X_tr_t, y_tr_t), batch_size=BATCH_SIZE, shuffle=True)
+
+    g = torch.Generator()
+    g.manual_seed(SEED)
+    train_loader = DataLoader(TensorDataset(X_tr_t, y_tr_t), batch_size=BATCH_SIZE,
+                              shuffle=True, generator=g)
 
     best_loss, best_state = float('inf'), None
     for epoch in range(EPOCHS):
@@ -112,8 +125,10 @@ cnn_tr_t, cnn_te_t = torch.tensor(cnn_tr_noisy), torch.tensor(cnn_te)
 gru_tr_t, gru_te_t = torch.tensor(gru_tr_noisy), torch.tensor(gru_te)
 dt_tr_t,  dt_te_t  = torch.tensor(dt_tr_noisy),  torch.tensor(dt_te)
 
+g2 = torch.Generator()
+g2.manual_seed(SEED)
 fusion_loader = DataLoader(TensorDataset(cnn_tr_t, gru_tr_t, dt_tr_t, y_tr_t),
-                            batch_size=BATCH_SIZE, shuffle=True)
+                            batch_size=BATCH_SIZE, shuffle=True, generator=g2)
 
 fusion = FusionModel(dt_feature_size=dt_tr.shape[1]).to(DEVICE)
 optimizer = torch.optim.Adam(fusion.parameters(), lr=LR, weight_decay=1e-3)

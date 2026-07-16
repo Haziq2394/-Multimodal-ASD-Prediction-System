@@ -5,12 +5,16 @@ import joblib
 import sys
 import os
 import json
+import tempfile
 import pandas as pd
 import matplotlib.pyplot as plt
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from src.fusion import FusionModel
 from src.standalone_models import CNNClassifier, BiGRUClassifier
+from src.resnet_cnn import ResNetMRIClassifier
+from src.mri_dataset import ABIDESliceDataset
+from src.phenotypic_dataset import get_iq_stats
 
 # ── Page Config ───────────────────────────────────────────────
 st.set_page_config(
@@ -94,6 +98,35 @@ def load_models():
 
 scaler, encoders, feature_cols, dt_model, cnn_model, bigru_model, fusion_model, comparison = load_models()
 
+# ── Load ABIDE (MRI + Phenotypic) Models ───────────────────────
+ABIDE_FEATURE_COLS = ["AGE_AT_SCAN", "SEX", "FIQ", "VIQ", "PIQ"]
+
+@st.cache_resource
+def load_abide_models(phenotypic_csv_path):
+    dt_scaler_abide  = joblib.load("models/abide_dt_scaler.pkl")
+    dt_feature_cols  = joblib.load("models/abide_dt_feature_cols.pkl")
+    dt_model_abide   = joblib.load("models/dt_abide_pruned.pkl")
+
+    cnn_abide = ResNetMRIClassifier(freeze_backbone=False)
+    cnn_abide.load_state_dict(torch.load("models/resnet_mri_final.pth", map_location="cpu"))
+    cnn_abide.eval()
+
+    bigru_abide = BiGRUClassifier()
+    bigru_abide.load_state_dict(torch.load("models/bigru_phenotypic.pth", map_location="cpu"))
+    bigru_abide.eval()
+
+    meta_clf = joblib.load("models/abide_late_fusion_meta_classifier.pkl")
+
+    iq_stats = get_iq_stats(phenotypic_csv_path)
+
+    abide_results = {}
+    if os.path.exists("models/abide_late_fusion_results.json"):
+        with open("models/abide_late_fusion_results.json") as f:
+            abide_results = json.load(f)
+
+    return (dt_scaler_abide, dt_feature_cols, dt_model_abide,
+            cnn_abide, bigru_abide, meta_clf, iq_stats, abide_results)
+
 SEQ_COLS = ['A1','A2','A3','A4','A5','A6','A7','A8','A9','A10_Autism_Spectrum_Quotient']
 
 DEFAULT_FUSION_METRICS = {"accuracy": 0.995, "precision": 1.0, "recall": 0.991, "f1": 0.995}
@@ -101,7 +134,7 @@ DEFAULT_FUSION_METRICS = {"accuracy": 0.995, "precision": 1.0, "recall": 0.991, 
 # ── Sidebar ───────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 🧠 Navigation")
-    page = st.radio("", ["🔍 Predict ASD", "📊 Model Dashboard", "ℹ️ About"])
+    page = st.radio("", ["🔍 Predict ASD", "🧬 MRI + Phenotypic (ABIDE)", "📊 Model Dashboard", "ℹ️ About"])
     st.divider()
 
     st.markdown("## 📈 Fusion Model Performance")
@@ -323,6 +356,157 @@ if page == "🔍 Predict ASD":
             for spine in ax2.spines.values():
                 spine.set_visible(False)
             st.pyplot(fig2)
+
+
+# ══════════════════════════════════════════════════════════════
+# PAGE 1.5 — MRI + PHENOTYPIC PREDICTION (ABIDE)
+# ══════════════════════════════════════════════════════════════
+elif page == "🧬 MRI + Phenotypic (ABIDE)":
+    st.title("🧬 MRI + Phenotypic ASD Prediction (ABIDE)")
+    st.markdown("### Structural MRI, IQ Profile & Clinical Fusion")
+    st.info(
+        "This page uses a **separate model system** trained on the ABIDE neuroimaging "
+        "dataset (868 subjects with MRI + IQ data), distinct from the Kaggle behavioural "
+        "system on the other pages. CNN here analyses an actual brain MRI slice; "
+        "Bi-GRU analyses the FIQ→VIQ→PIQ IQ sequence; Decision Tree uses age, sex, and IQ scores."
+    )
+    st.divider()
+
+    phenotypic_csv_path = st.text_input(
+        "Path to ABIDE phenotypic CSV (used only to normalize IQ scores the same way as training)",
+        value="Phenotypic_V1_0b_preprocessed1.csv"
+    )
+
+    try:
+        (dt_scaler_abide, dt_feature_cols_abide, dt_model_abide,
+         cnn_model_abide, bigru_model_abide, meta_clf_abide,
+         iq_stats, abide_results) = load_abide_models(phenotypic_csv_path)
+        models_loaded = True
+    except FileNotFoundError as e:
+        models_loaded = False
+        st.error(
+            "Couldn't load one of the ABIDE model files. Make sure you've run "
+            "`train_dt_abide.py` and `generate_abide_fusion.py`, and that the phenotypic "
+            f"CSV path above is correct.\n\nMissing: {e}"
+        )
+
+    if models_loaded:
+        # Headline metrics from the offline evaluation, if available
+        fusion_perf = abide_results.get("model_performance", {}).get("Late Fusion")
+        if fusion_perf:
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Fusion Accuracy",  f"{fusion_perf['accuracy']*100:.1f}%")
+            m2.metric("Fusion Precision", f"{fusion_perf['precision']*100:.1f}%")
+            m3.metric("Fusion Recall",    f"{fusion_perf['recall']*100:.1f}%")
+            m4.metric("Fusion ROC-AUC",   f"{fusion_perf['roc_auc']*100:.1f}%")
+            st.caption("Offline test-set performance from generate_abide_fusion.py (174 held-out subjects).")
+            st.divider()
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("🧠 Upload MRI Slice")
+            mri_file = st.file_uploader(
+                "Upload a single .nii axial slice file for this subject",
+                type=["nii"]
+            )
+            st.caption(
+                "Expects the same kind of pre-extracted 2D axial .nii slice used during "
+                "training (not a raw multi-slice 3D volume)."
+            )
+
+        with col2:
+            st.subheader("📋 Phenotypic & Clinical Info")
+            age_at_scan = st.number_input("Age at Scan (years)", 5.0, 65.0, 14.0)
+            sex_choice  = st.selectbox("Sex", ["Male", "Female"])
+            sex_val     = 1 if sex_choice == "Male" else 2  # ABIDE convention: 1=Male, 2=Female
+            fiq = st.number_input("Full-Scale IQ (FIQ)", 50.0, 160.0, 100.0)
+            viq = st.number_input("Verbal IQ (VIQ)", 50.0, 160.0, 100.0)
+            piq = st.number_input("Performance IQ (PIQ)", 50.0, 160.0, 100.0)
+
+        st.divider()
+
+        if st.button("🔍 Run ABIDE Prediction", use_container_width=True, type="primary"):
+            if mri_file is None:
+                st.warning("Please upload an MRI (.nii) slice before predicting.")
+            else:
+                # ── DT branch: age, sex, FIQ, VIQ, PIQ ──────────────
+                dt_row = np.array([[age_at_scan, sex_val, fiq, viq, piq]], dtype=np.float32)
+                dt_row_scaled = dt_scaler_abide.transform(dt_row)
+                dt_prob_abide = dt_model_abide.predict_proba(dt_row_scaled)[0][1]
+
+                # ── Bi-GRU branch: z-scored FIQ -> VIQ -> PIQ sequence ──
+                fiq_z = (fiq - iq_stats["FIQ"][0]) / iq_stats["FIQ"][1]
+                viq_z = (viq - iq_stats["VIQ"][0]) / iq_stats["VIQ"][1]
+                piq_z = (piq - iq_stats["PIQ"][0]) / iq_stats["PIQ"][1]
+                seq_input = torch.tensor(
+                    [[[fiq_z], [viq_z], [piq_z]]], dtype=torch.float32
+                )
+                with torch.no_grad():
+                    gru_prob_abide = bigru_model_abide(seq_input).item()
+
+                # ── CNN branch: uploaded MRI slice ──────────────────
+                with tempfile.NamedTemporaryFile(suffix=".nii", delete=False) as tmp:
+                    tmp.write(mri_file.read())
+                    tmp_path = tmp.name
+                try:
+                    one_row_df = pd.DataFrame([{"filepath": tmp_path, "label": 0}])
+                    mri_ds = ABIDESliceDataset(one_row_df, augment=False)
+                    img_tensor, _ = mri_ds[0]
+                    with torch.no_grad():
+                        cnn_prob_abide = cnn_model_abide(img_tensor.unsqueeze(0)).item()
+                finally:
+                    os.remove(tmp_path)
+
+                # ── Late fusion meta-classifier (order: CNN, Bi-GRU, DT) ──
+                meta_X = np.array([[cnn_prob_abide, gru_prob_abide, dt_prob_abide]], dtype=np.float32)
+                fusion_prob_abide = meta_clf_abide.predict_proba(meta_X)[0][1]
+
+                prediction = "ASD Traits Detected" if fusion_prob_abide > 0.5 else "No ASD Traits Detected"
+                confidence = fusion_prob_abide if fusion_prob_abide > 0.5 else 1 - fusion_prob_abide
+
+                st.divider()
+                st.caption("Prediction made using: **Late Fusion (CNN + Bi-GRU + Decision Tree)**")
+                if fusion_prob_abide > 0.5:
+                    st.error(f"## 🔴 {prediction}")
+                else:
+                    st.success(f"## 🟢 {prediction}")
+
+                st.metric("Confidence Score", f"{confidence * 100:.1f}%")
+
+                st.markdown("**All Model Outputs (for comparison):**")
+                mc1, mc2, mc3, mc4 = st.columns(4)
+                mc1.metric("CNN (MRI)", f"{cnn_prob_abide * 100:.1f}%")
+                mc2.metric("Bi-GRU (IQ)", f"{gru_prob_abide * 100:.1f}%")
+                mc3.metric("Decision Tree", f"{dt_prob_abide * 100:.1f}%")
+                mc4.metric("Late Fusion", f"{fusion_prob_abide * 100:.1f}%")
+
+                st.divider()
+                st.subheader("📊 Prediction Visualization")
+                fig, ax = plt.subplots(figsize=(6, 4))
+                fig.patch.set_alpha(0)
+                ax.set_facecolor("none")
+                labels_bar = ["CNN\n(MRI)", "Bi-GRU\n(IQ)", "Decision\nTree", "Late\nFusion"]
+                scores_bar = [cnn_prob_abide * 100, gru_prob_abide * 100,
+                              dt_prob_abide * 100, fusion_prob_abide * 100]
+                colors_bar = ['#e74c3c' if s > 50 else '#2ecc71' for s in scores_bar]
+                ax.bar(labels_bar, scores_bar, color=colors_bar)
+                ax.set_ylim(0, 100)
+                ax.set_ylabel("ASD Probability (%)", color='white')
+                ax.set_title("All Models — This Prediction", color='white')
+                ax.axhline(y=50, color='gray', linestyle='--', linewidth=1)
+                ax.tick_params(colors='white')
+                for spine in ax.spines.values():
+                    spine.set_visible(False)
+                st.pyplot(fig)
+
+        st.divider()
+        st.caption(
+            "⚠️ Research and educational purposes only. CNN/Bi-GRU here were "
+            "trained on independently-drawn splits and reused for inference on the "
+            "unified Decision Tree split (see the honesty note in your report); this "
+            "is a research demonstration, not a diagnostic tool."
+        )
 
 
 # ══════════════════════════════════════════════════════════════

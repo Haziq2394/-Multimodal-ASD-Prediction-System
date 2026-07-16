@@ -1,0 +1,107 @@
+{
+  "cohort_note": "All models trained/evaluated on the SAME ABIDE subjects (n=868 total). CNN/Bi-GRU reused pre-trained weights for inference; DT trained fresh on this exact split.",
+  "model_performance": {
+    "CNN": {
+      "accuracy": 0.8160919540229885,
+      "precision": 0.8292682926829268,
+      "recall": 0.7906976744186046,
+      "f1": 0.8095238095238095,
+      "roc_auc": 0.8785676532769556,
+      "confusion_matrix": [
+        [
+          74,
+          14
+        ],
+        [
+          18,
+          68
+        ]
+      ]
+    },
+    "Bi-GRU": {
+      "accuracy": 0.7011494252873564,
+      "precision": 0.7297297297297297,
+      "recall": 0.627906976744186,
+      "f1": 0.675,
+      "roc_auc": 0.738107822410148,
+      "confusion_matrix": [
+        [
+          68,
+          20
+        ],
+        [
+          32,
+          54
+        ]
+      ]
+    },
+    "Decision Tree": {
+      "accuracy": 0.6839080459770115,
+      "precision": 0.6867469879518072,
+      "recall": 0.6627906976744186,
+      "f1": 0.6745562130177515,
+      "roc_auc": 0.6810253699788583,
+      "confusion_matrix": [
+        [
+          62,
+          26
+        ],
+        [
+          29,
+          57
+        ]
+      ]
+    },
+    "Late Fusion": {
+      "accuracy": 0.8333333333333334,
+      "precision": 0.8202247191011236,
+      "recall": 0.8488372093023255,
+      "f1": 0.8342857142857143,
+      "roc_auc": 0.8997093023255814,
+      "confusion_matrix": [
+        [
+          72,
+          16
+        ],
+        [
+          13,
+          73
+        ]
+      ]
+    }
+  },
+  "mcnemar_test": {
+    "Late Fusion vs CNN": {
+      "statistic": 4.0,
+      "p_value": 0.548828125
+    },
+    "Late Fusion vs Bi-GRU": {
+      "statistic": 11.255813953488373,
+      "p_value": 0.0007937400865612488
+    },
+    "Late Fusion vs DT": {
+      "statistic": 13.58695652173913,
+      "p_value": 0.00022776260245036984
+    }
+  },
+  "delong_test": {
+    "Late Fusion vs CNN": {
+      "auc_a": 0.8997093023255813,
+      "auc_b": 0.8785676532769555,
+      "z": 1.3013068016187013,
+      "p_value": 0.19315346002300027
+    },
+    "Late Fusion vs Bi-GRU": {
+      "auc_a": 0.8997093023255813,
+      "auc_b": 0.7381078224101478,
+      "z": 4.702049331997416,
+      "p_value": 2.5756324832926225e-06
+    },
+    "Late Fusion vs DT": {
+      "auc_a": 0.8997093023255813,
+      "auc_b": 0.6810253699788582,
+      "z": 6.18773116048451,
+      "p_value": 6.103630934006787e-10
+    }
+  }
+}

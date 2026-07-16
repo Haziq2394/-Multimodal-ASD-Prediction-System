@@ -42,3 +42,20 @@ def build_phenotypic_sequences(phenotypic_csv, sub_id_col="SUB_ID", dx_col="DX_G
     print(f"   Sequence shape: {seq.shape}  (FIQ -> VIQ -> PIQ per subject)")
 
     return seq, labels, sub_ids
+
+
+def get_iq_stats(phenotypic_csv, dx_col="DX_GROUP"):
+    """
+    Returns the per-column mean/std used to z-score FIQ/VIQ/PIQ in
+    build_phenotypic_sequences, computed over the SAME 868-subject cohort.
+
+    Needed at inference time: a single new subject's raw FIQ/VIQ/PIQ must be
+    normalized with these exact same statistics (not re-derived from just
+    that one subject) to match what the trained Bi-GRU actually saw.
+    """
+    df = pd.read_csv(phenotypic_csv)
+    iq_cols = ["FIQ", "VIQ", "PIQ"]
+    for c in iq_cols:
+        df[c] = df[c].replace(-9999, np.nan)
+    df = df.dropna(subset=iq_cols).copy()
+    return {c: (float(df[c].mean()), float(df[c].std())) for c in iq_cols}
