@@ -362,13 +362,18 @@ if page == "🔍 Predict ASD":
 # PAGE 1.5 — MRI + PHENOTYPIC PREDICTION (ABIDE)
 # ══════════════════════════════════════════════════════════════
 elif page == "🧬 MRI + Phenotypic (ABIDE)":
-    st.title("🧬 MRI + Phenotypic ASD Prediction (ABIDE)")
-    st.markdown("### Structural MRI, IQ Profile & Clinical Fusion")
+    st.title("🧠 Multi-Modal AI System for ASD Prediction")
+    st.markdown("### CNN, Bi-GRU & Decision Tree Fusion")
+    st.markdown("**Using Structural MRI, IQ Profiles & Clinical Data**")
+    
     st.info(
-        "This page uses a **separate model system** trained on the ABIDE neuroimaging "
-        "dataset (868 subjects with MRI + IQ data), distinct from the Kaggle behavioural "
-        "system on the other pages. CNN here analyses an actual brain MRI slice; "
-        "Bi-GRU analyses the FIQ→VIQ→PIQ IQ sequence; Decision Tree uses age, sex, and IQ scores."
+        "This system integrates three deep learning architectures to predict autism spectrum disorder "
+        "in children using the ABIDE neuroimaging dataset (868 subjects). "
+        "\n\n**Model Components:**"
+        "\n• **CNN** — Analyzes structural brain MRI slices for spatial patterns"
+        "\n• **Bi-GRU** — Processes IQ sequences (FIQ → VIQ → PIQ) for cognitive profiles"
+        "\n• **Decision Tree** — Interprets clinical features (age, sex, IQ scores) with transparent rules"
+        "\n\nThis is a separate model system, distinct from the Kaggle behavioral system on other pages."
     )
     st.divider()
 
