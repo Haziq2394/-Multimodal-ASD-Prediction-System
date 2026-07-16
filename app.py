@@ -367,57 +367,74 @@ elif page == "🧬 MRI + Phenotypic (ABIDE)":
     st.markdown("**Using Structural MRI, IQ Profiles & Clinical Data**")
     st.divider()
 
-    # METRICS AT THE TOP
-    fusion_perf = abide_results.get("model_performance", {}).get("Late Fusion")
-    if fusion_perf:
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Fusion Accuracy",  f"{fusion_perf['accuracy']*100:.1f}%")
-        m2.metric("Fusion Precision", f"{fusion_perf['precision']*100:.1f}%")
-        m3.metric("Fusion Recall",    f"{fusion_perf['recall']*100:.1f}%")
-        m4.metric("Fusion ROC-AUC",   f"{fusion_perf['roc_auc']*100:.1f}%")
-        st.caption("Offline test-set performance from generate_abide_fusion.py (174 held-out subjects).")
-        st.divider()
-
     st.markdown("""
     ### 🧠 About MRI Files (.nii)
-    
-    A **`.nii` file** contains brain imaging data from an MRI machine. For this system, you need:
-    - A single 2D brain slice (pre-extracted from a 3D scan)
-    - Resolution: 224 × 224 pixels
-    - Grayscale neuroimaging data
+    A **`.nii` file** contains brain imaging data from an MRI machine...
     """)
-    
-    st.warning("""
-    📌 **Note:** This requires actual neuroimaging data from research or clinical institutions.
-    """)
-    
+    st.warning("📌 **Note:** This requires actual neuroimaging data...")
     st.divider()
 
-    col1, col2 = st.columns(2)
+    # LOAD MODELS FIRST (before anything else)
+    phenotypic_csv_path = st.text_input(
+        "Path to ABIDE phenotypic CSV (used only to normalize IQ scores the same way as training)",
+        value="Phenotypic_V1_0b_preprocessed1.csv"
+    )
 
-    with col1:
-        st.subheader("🧠 Upload MRI Slice")
-        mri_file = st.file_uploader(
-            "Upload a single .nii axial slice file for this subject",
-            type=["nii"],
-            key="abide_mri_uploader"  # ← ADD THIS UNIQUE KEY
+    try:
+        (dt_scaler_abide, dt_feature_cols_abide, dt_model_abide,
+         cnn_model_abide, bigru_model_abide, meta_clf_abide,
+         iq_stats, abide_results) = load_abide_models(phenotypic_csv_path)
+        models_loaded = True
+    except FileNotFoundError as e:
+        models_loaded = False
+        st.error(
+            "Couldn't load one of the ABIDE model files. Make sure you've run "
+            "`train_dt_abide.py` and `generate_abide_fusion.py`, and that the phenotypic "
+            f"CSV path above is correct.\n\nMissing: {e}"
         )
 
-    with col2:
-        st.subheader("📋 Phenotypic & Clinical Info")
-        age_at_scan = st.number_input("Age at Scan (years)", 5.0, 65.0, 14.0)
-        sex_choice  = st.selectbox("Sex", ["Male", "Female"])
-        sex_val     = 1 if sex_choice == "Male" else 2
-        fiq = st.number_input("Full-Scale IQ (FIQ)", 50.0, 160.0, 100.0)
-        viq = st.number_input("Verbal IQ (VIQ)", 50.0, 160.0, 100.0)
-        piq = st.number_input("Performance IQ (PIQ)", 50.0, 160.0, 100.0)
+    if models_loaded:
+        # SHOW METRICS
+        fusion_perf = abide_results.get("model_performance", {}).get("Late Fusion")
+        if fusion_perf:
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Fusion Accuracy",  f"{fusion_perf['accuracy']*100:.1f}%")
+            m2.metric("Fusion Precision", f"{fusion_perf['precision']*100:.1f}%")
+            m3.metric("Fusion Recall",    f"{fusion_perf['recall']*100:.1f}%")
+            m4.metric("Fusion ROC-AUC",   f"{fusion_perf['roc_auc']*100:.1f}%")
+            st.caption("Offline test-set performance from generate_abide_fusion.py (174 held-out subjects).")
+            st.divider()
 
-    st.divider()
+        # SHOW INPUT FIELDS
+        col1, col2 = st.columns(2)
 
-    if st.button("🔍 Run ABIDE Prediction", use_container_width=True, type="primary"):
-        # Rest of your prediction code...
-    
-    # Rest of your prediction code continues here...
+        with col1:
+            st.subheader("🧠 Upload MRI Slice")
+            mri_file = st.file_uploader(
+                "Upload a single .nii axial slice file for this subject",
+                type=["nii"],
+                key="abide_mri_uploader"
+            )
+
+        with col2:
+            st.subheader("📋 Phenotypic & Clinical Info")
+            age_at_scan = st.number_input("Age at Scan (years)", 5.0, 65.0, 14.0)
+            sex_choice  = st.selectbox("Sex", ["Male", "Female"])
+            sex_val     = 1 if sex_choice == "Male" else 2
+            fiq = st.number_input("Full-Scale IQ (FIQ)", 50.0, 160.0, 100.0)
+            viq = st.number_input("Verbal IQ (VIQ)", 50.0, 160.0, 100.0)
+            piq = st.number_input("Performance IQ (PIQ)", 50.0, 160.0, 100.0)
+
+        st.divider()
+
+        # SHOW PREDICTION BUTTON
+        if st.button("🔍 Run ABIDE Prediction", use_container_width=True, type="primary"):
+            if mri_file is None:
+                st.warning("Please upload an MRI (.nii) slice before predicting.")
+            else:
+                # YOUR PREDICTION CODE HERE
+                # (CNN, Bi-GRU, DT, Fusion logic)
+                pass
 
     phenotypic_csv_path = st.text_input(
         "Path to ABIDE phenotypic CSV (used only to normalize IQ scores the same way as training)",
