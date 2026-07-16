@@ -365,17 +365,33 @@ elif page == "🧬 MRI + Phenotypic (ABIDE)":
     st.title("🧠 Multi-Modal AI System for ASD Prediction")
     st.markdown("### CNN, Bi-GRU & Decision Tree Fusion")
     st.markdown("**Using Structural MRI, IQ Profiles & Clinical Data**")
-    
-    st.info(
-        "This system integrates three deep learning architectures to predict autism spectrum disorder "
-        "in children using the ABIDE neuroimaging dataset (868 subjects). "
-        "\n\n**Model Components:**"
-        "\n• **CNN** — Analyzes structural brain MRI slices for spatial patterns"
-        "\n• **Bi-GRU** — Processes IQ sequences (FIQ → VIQ → PIQ) for cognitive profiles"
-        "\n• **Decision Tree** — Interprets clinical features (age, sex, IQ scores) with transparent rules"
-        "\n\nThis is a separate model system, distinct from the Kaggle behavioral system on other pages."
-    )
     st.divider()
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("🧠 Upload MRI Slice")
+        mri_file = st.file_uploader(
+            "Upload a single .nii axial slice file for this subject",
+            type=["nii"]
+        )
+        st.caption(
+            "Expects the same kind of pre-extracted 2D axial .nii slice used during "
+            "training (not a raw multi-slice 3D volume)."
+        )
+
+    with col2:
+        st.subheader("📋 Phenotypic & Clinical Info")
+        age_at_scan = st.number_input("Age at Scan (years)", 5.0, 65.0, 14.0)
+        sex_choice  = st.selectbox("Sex", ["Male", "Female"])
+        sex_val     = 1 if sex_choice == "Male" else 2
+        fiq = st.number_input("Full-Scale IQ (FIQ)", 50.0, 160.0, 100.0)
+        viq = st.number_input("Verbal IQ (VIQ)", 50.0, 160.0, 100.0)
+        piq = st.number_input("Performance IQ (PIQ)", 50.0, 160.0, 100.0)
+
+    st.divider()
+    
+    # Rest of your prediction code continues here...
 
     phenotypic_csv_path = st.text_input(
         "Path to ABIDE phenotypic CSV (used only to normalize IQ scores the same way as training)",
@@ -593,30 +609,34 @@ elif page == "ℹ️ About":
     st.divider()
 
     st.markdown("""
-    ## 🧠 Multimodal ASD Prediction System
+    ## 🧠 Multi-Modal AI System for Predicting Autism Spectrum Disorder in Children
 
-    This system predicts **Autism Spectrum Disorder (ASD) traits in children** using a
-    multimodal deep learning approach that combines three different models, and lets
-    the user compare each branch individually against the combined fusion prediction:
+    This system uses three complementary deep learning architectures to predict autism spectrum disorder 
+    using structural brain imaging, cognitive assessment sequences, and clinical data.
 
-    ### Models Used
-    - **CNN (Convolutional Neural Network)** — Analyses behavioural screening scores
-      (A1–A10) as a 2D heatmap image to detect visual patterns
-    - **Bi-GRU (Bidirectional Gated Recurrent Unit)** — Processes the same A1–A10 scores
-      as a temporal sequence to capture behavioural progression
-    - **Decision Tree** — Analyses all 26 clinical and demographic features using
-      classical machine learning
+    ### System Architecture
+    
+    **This page features the ABIDE-based multi-modal system:**
+    
+    This system integrates three deep learning architectures to predict autism spectrum disorder in children 
+    using the ABIDE neuroimaging dataset (868 subjects).
+    
+    **Model Components:**
+    - **CNN** — Analyzes structural brain MRI slices for spatial patterns
+    - **Bi-GRU** — Processes IQ sequences (FIQ → VIQ → PIQ) for cognitive profiles
+    - **Decision Tree** — Interprets clinical features (age, sex, IQ scores) with transparent rules
+    
+    This is a separate model system, distinct from the Kaggle behavioral system on other pages.
+    
+    ---
+    
+    ### Kaggle Behavioral System (Other Pages)
 
-    ### Fusion Strategy
-    The outputs of all three models are **concatenated and passed through a fusion
-    classifier** that makes the final ASD prediction. Users can also select an
-    individual model to see its standalone contribution.
-
-    ### Dataset
-    - **Source:** Kaggle Autistic Child Behavioural Dataset
+    The "Predict ASD" and "Model Dashboard" pages use a different model trained on:
+    - **Source:** Kaggle Autistic Child Behavioral Dataset
     - **Samples:** 1,985 children
-    - **Features:** 26 behavioural, clinical, and demographic features
-    - **Target:** ASD Traits (Yes / No)
+    - **Features:** 26 behavioral, clinical, and demographic features
+    - **Models:** CNN, Bi-GRU, Decision Tree (late fusion)
 
     ### Disclaimer
     > ⚠️ This tool is for **research and educational purposes only**.
