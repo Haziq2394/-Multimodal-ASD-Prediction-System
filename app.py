@@ -64,6 +64,17 @@ st.markdown("""
     font-size: 0.95rem;
     backdrop-filter: blur(10px);
 }
+div[data-baseweb="select"] > div {
+    border-color: rgba(255,255,255,0.15) !important;
+    transition: border-color 0.15s ease;
+}
+div[data-baseweb="select"] > div:focus,
+div[data-baseweb="select"] > div:focus-within,
+div[data-baseweb="select"]:focus-within > div {
+    outline: none !important;
+    box-shadow: none !important;
+    border-color: rgba(255,255,255,0.15) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
